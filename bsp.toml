@@ -1,0 +1,35 @@
+[bsp]
+name = "nucleo-u5a5"
+lean_bsp_contract_version = "1.0"
+version = "0.1.0"
+description = "ST NUCLEO-U5A5ZJ-Q board (STM32U5A5ZJ, Cortex-M33)"
+maintainer = "sebastien.riou@pqshield.com"
+entry_point = "bsp_cli.py"
+
+[bsp.hardware]
+flash_bytes = 0x400000
+ram_bytes = 0x270000
+
+[bsp.build]
+backend = "custom"                   # bsp_cli.py drives the compiler; CROSS_COMPILE selects it
+requires_tools = ["arm-none-eabi-gcc", "hwbridge"]
+
+[bsp.primitives]
+uart = true                          # UART 0 is COM1, the ST-LINK virtual COM port
+led = true                           # 0 green, 1 blue, 2 red
+button = true                        # 0 is the blue user button
+cpu_cycle_counter = true             # DWT CYCCNT
+cpu_frequency = true
+cache_clear = true                   # ICACHE, DCACHE1 and the flash prefetch buffer
+heap_usage = true
+flash_read = false
+flash_erase = false
+flash_write = false
+
+[[bsp.targets]]
+name = "cortex-m33"
+cpu = "cortex-m33"
+toolchain = "arm-none-eabi"
+cflags = ["-mcpu=cortex-m33", "-mthumb", "-mfpu=fpv5-sp-d16", "-mfloat-abi=softfp"]
+linker_fragments = ["memory.ld", "sections_head.ld", "sections_data.ld", "sections_tail.ld"]
+run_mode = "auto-after-load"
