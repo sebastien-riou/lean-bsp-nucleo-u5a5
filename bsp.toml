@@ -1,6 +1,6 @@
 [bsp]
 name = "nucleo-u5a5"
-lean_bsp_contract_version = "1.0"
+lean_bsp_contract_version = "1.1"
 version = "0.1.0"
 description = "ST NUCLEO-U5A5ZJ-Q board (STM32U5A5ZJ, Cortex-M33)"
 maintainer = "sebastien.riou@pqshield.com"
