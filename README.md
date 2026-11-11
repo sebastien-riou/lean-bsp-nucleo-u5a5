@@ -27,6 +27,7 @@ lbsp build-load-run --bsp nucleo-u5a5 --until 'hello-world done' --timeout 60
 | Cycle counter, CPU frequency | DWT `CYCCNT`, at `SystemCoreClock` (160 MHz) |
 | Delay | busy loop on the cycle counter: works with interrupts masked |
 | Cache clear | ICACHE and DCACHE1 invalidated, flash prefetch buffer toggled |
+| Cycle timer | TIM5 at the CPU clock (one tick per cycle), one-pulse; its interrupt reaches the handler through a RAM copy of the vector table. SysTick and the button interrupt are held off while it runs. |
 | Heap usage | growth of the heap end since the last reset, tracked in `_sbrk` (`Core/Src/sysmem.c`) |
 | Reset | `NVIC_SystemReset()` |
 | `app_tick` | from `SysTick_Handler`, every millisecond |

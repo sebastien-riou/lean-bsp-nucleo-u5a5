@@ -126,3 +126,79 @@ void bsp_clear_caches(void) {
     HAL_DCACHE_Invalidate(&hdcache1);
     __HAL_FLASH_PREFETCH_BUFFER_ENABLE();
 }
+
+/* ---- cycle timer: TIM5, one tick per CPU cycle ----
+ * TIM5 counts PCLK1 undivided, which is HCLK with this board's clock configuration (AHB and APB1
+ * prescalers 1, see SystemClock_Config): one tick per CPU cycle. The handler goes straight into a RAM
+ * copy of the vector table, so the interrupt enters it with the exception-entry state. The same as
+ * nucleo-f207's cycle timer, set up with register writes (this BSP does not enable the HAL TIM
+ * module) and without its scope output pin. */
+
+#define N_VECTORS (16 + 132)  /* the core's exceptions, then this part's interrupts (up to HSPI1_IRQn) */
+static bsp_cycle_timer_handler_t ram_vectors[N_VECTORS] __attribute__((aligned(1024)));  /* VTOR: 1024 >= 4 * N_VECTORS */
+static bool held;
+static bool tick_was_on;
+static bool button_was_on;
+
+/* The BSP's other interrupts, the tick (SysTick) and the user button (EXTI13), must not add cycles to
+ * what is being timed. */
+static void hold_interrupts(void) {
+    if (held) return;
+    tick_was_on = SysTick->CTRL & SysTick_CTRL_TICKINT_Msk;
+    SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+    SCB->ICSR = SCB_ICSR_PENDSTCLR_Msk;  /* a tick already pending would fire inside the window */
+    button_was_on = NVIC_GetEnableIRQ(EXTI13_IRQn) != 0;
+    NVIC_DisableIRQ(EXTI13_IRQn);
+    held = true;
+}
+
+static void release_interrupts(void) {
+    if (!held) return;
+    if (tick_was_on) SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+    if (button_was_on) NVIC_EnableIRQ(EXTI13_IRQn);
+    held = false;
+}
+
+void bsp_cycle_timer_init(bsp_cycle_timer_handler_t handler) {
+    const bsp_cycle_timer_handler_t *flash_vectors = (const bsp_cycle_timer_handler_t *)SCB->VTOR;
+    for (unsigned i = 0; i < N_VECTORS; i++) ram_vectors[i] = flash_vectors[i];
+    ram_vectors[16 + TIM5_IRQn] = handler;
+    __DSB();
+    SCB->VTOR = (uint32_t)ram_vectors;
+    __DSB();
+    __ISB();
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM5EN;
+    (void)RCC->APB1ENR1;                                /* the clock runs before TIM5 is written */
+    DBGMCU->APB1FZR1 |= DBGMCU_APB1FZR1_DBG_TIM5_STOP;  /* halts with the core under a debugger */
+    TIM5->CR1 = 0;                                      /* up-counting, no ARR preload */
+    TIM5->PSC = 0;                                      /* one tick per TIM5 clock, i.e. per CPU cycle */
+    TIM5->ARR = 0xFFFFFFFFu;
+    TIM5->EGR = TIM_EGR_UG;                             /* loads PSC */
+    TIM5->SR = 0;
+    NVIC_SetPriority(TIM5_IRQn, 0);                     /* above the tick and the button (15) */
+    NVIC_ClearPendingIRQ(TIM5_IRQn);
+    NVIC_EnableIRQ(TIM5_IRQn);
+}
+
+void bsp_cycle_timer_start(uint32_t cycles) {
+    hold_interrupts();
+    TIM5->ARR = cycles;
+    TIM5->CNT = 0;
+    TIM5->SR = ~TIM_SR_UIF;
+    TIM5->DIER |= TIM_DIER_UIE;
+    TIM5->CR1 |= TIM_CR1_OPM;  /* one pulse: stops at the update */
+    TIM5->CR1 |= TIM_CR1_CEN;
+}
+
+void bsp_cycle_timer_stop(void) {
+    TIM5->CR1 &= ~TIM_CR1_CEN;
+    release_interrupts();
+}
+
+uint32_t bsp_cycle_timer_read(void) { return TIM5->CNT; }
+
+void bsp_cycle_timer_ack(void) {
+    bsp_cycle_timer_stop();
+    TIM5->SR = ~TIM_SR_UIF;
+    TIM5->DIER &= ~TIM_DIER_UIE;
+}

@@ -21,6 +21,7 @@ button = true                        # 0 is the blue user button
 cpu_cycle_counter = true             # DWT CYCCNT
 cpu_frequency = true
 cache_clear = true                   # ICACHE, DCACHE1 and the flash prefetch buffer
+cycle_timer = true                   # TIM5, one tick per CPU cycle
 heap_usage = true
 flash_read = false
 flash_erase = false
