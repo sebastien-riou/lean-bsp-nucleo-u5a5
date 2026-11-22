@@ -48,6 +48,13 @@
     . = ALIGN(8);
   } >RAM
 
+  /* NVM region 0: the application's data there, laid out at link time; nothing is loaded there */
+  .bsp_nvm0 (NOLOAD) :
+  {
+    KEEP(*(.bsp_nvm0))
+    KEEP(*(.bsp_nvm0.*))
+  } >NVM0
+
   /DISCARD/ :
   {
     libc.a:* ( * )

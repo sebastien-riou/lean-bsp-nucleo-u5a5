@@ -6,6 +6,7 @@
 #include "main.h"
 #include "bsp_api.h"
 #include "bsp_board.h"
+#include "bsp_nvm.h"
 
 extern DCACHE_HandleTypeDef hdcache1;
 
@@ -15,8 +16,8 @@ static const bsp_capabilities_t capabilities = {
     .n_leds = 3,
     .n_buttons = 1,
     .has_cycle_counter = true,
-    .n_nvm_regions = 0,
-    .nvm_regions = NULL,
+    .n_nvm_regions = BSP_N_NVM_REGIONS,
+    .nvm_regions = bsp_nvm_regions,
 };
 
 const bsp_capabilities_t *bsp_get_capabilities(void) { return &capabilities; }

@@ -1,13 +1,13 @@
 [bsp]
 name = "nucleo-u5a5"
-lean_bsp_contract_version = "1.1"
+lean_bsp_contract_version = "1.2"
 version = "0.1.0"
 description = "ST NUCLEO-U5A5ZJ-Q board (STM32U5A5ZJ, Cortex-M33)"
 maintainer = "sebastien.riou@pqshield.com"
 entry_point = "bsp_cli.py"
 
 [bsp.hardware]
-flash_bytes = 0x400000
+flash_bytes = 0x200000               # bank 1; bank 2 is NVM region 0
 ram_bytes = 0x270000
 
 [bsp.build]
@@ -23,9 +23,17 @@ cpu_frequency = true
 cache_clear = true                   # ICACHE, DCACHE1 and the flash prefetch buffer
 cycle_timer = true                   # TIM5, one tick per CPU cycle
 heap_usage = true
-flash_read = false
-flash_erase = false
-flash_write = false
+flash_read = true                    # NVM region 0, flash bank 2
+flash_erase = true
+flash_write = true
+
+[[bsp.nvm_regions]]
+name = "bank2"                       # never loaded: the image stays in bank 1
+base = 0x08200000
+size = 0x200000
+page_size = 8192
+write_size = 16                      # a quad-word, the ECC word
+zero_overwrite = true
 
 [[bsp.targets]]
 name = "cortex-m33"

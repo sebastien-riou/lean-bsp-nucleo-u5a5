@@ -9,7 +9,8 @@ MEMORY
 {
   RAM   (xrw) : ORIGIN = 0x20000000, LENGTH = 2496K
   SRAM4 (xrw) : ORIGIN = 0x28000000, LENGTH = 16K
-  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 4096K
+  FLASH (rx)  : ORIGIN = 0x08000000, LENGTH = 2048K  /* bank 1: the image */
+  NVM0  (rw)  : ORIGIN = 0x08200000, LENGTH = 2048K  /* bank 2: NVM region 0, never loaded (src/bsp_nvm.c) */
 }
 
 /* Highest address of the user mode stack */

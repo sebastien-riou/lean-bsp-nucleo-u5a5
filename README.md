@@ -33,7 +33,7 @@ lbsp build-load-run --bsp nucleo-u5a5 --until 'hello-world done' --timeout 60
 | `app_tick` | from `SysTick_Handler`, every millisecond |
 | `app_on_fault` | from the HardFault, MemManage, BusFault and UsageFault handlers (`pc` is 0) |
 | `app_on_exit` | default does nothing: `main()` then parks the CPU |
-| Flash/NVM | not yet |
+| Flash/NVM | region 0, `bank2`: flash bank 2 (0x08200000, 2 MiB), 8 KiB pages, 16-byte program unit (a quad-word, the ECC word), zeros may be programmed over programmed data. The image stays in bank 1 (2 MiB). Erase and write refuse anything outside the region. A load through lean-hwbridge erases the whole flash, bank 2 included |
 
 ## Layout
 
@@ -44,8 +44,11 @@ code is only in `USER CODE` sections of the generated files (the glue in `main()
 - `Core/`, `Drivers/`, `startup_stm32u5a5xx.s`: the vendor-generated bring-up (HAL, CMSIS, Nucleo BSP;
   device headers for this part only).
 - `src/bsp_nucleo_u5a5.c`: the primitives, `bsp_init()` and the default application hooks.
+- `src/bsp_nvm.c`: NVM region 0, the flash controller's erase and program sequences (from lean-ftl's STM32U5
+  accessors), run from RAM with interrupts masked.
 - `include/bsp_api.h`: the contract header, identical to lean-bsp's canonical copy (`lbsp check` verifies it).
-- `linker/`: `memory.ld` (this board's memory map), the Cortex-M `sections_head/data/tail.ld`, and
+- `linker/`: `memory.ld` (this board's memory map: the image in bank 1, bank 2 as `NVM0`), the Cortex-M
+  `sections_head/data/tail.ld` (the tail gathers `.bsp_nvm0` in bank 2, loading nothing there), and
   `default.ld` which includes them. An application needing its own sections copies `default.ld`.
 - `bsp.toml`, `bsp_cli.py`: what lean-bsp reads and runs. `bsp_cli.py` is this board's data on top of lean-bsp's
   board helpers (`leanbsp.backends`), which lean-bsp runs it with.
