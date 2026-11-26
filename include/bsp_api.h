@@ -1,4 +1,4 @@
-/* bsp_api.h - lean-bsp contract 1.2
+/* bsp_api.h - lean-bsp contract 1.3
  *
  * Shared by every lean-bsp BSP and every lean-bsp application. Each BSP keeps
  * a byte-identical copy at include/bsp_api.h; `lean-bsp check` verifies it.
@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define LEAN_BSP_CONTRACT_VERSION "1.2"
+#define LEAN_BSP_CONTRACT_VERSION "1.3"
 
 /* ---- BSP -> app hooks ----
  * app_main is required and defined by the application. The BSP provides weak,
@@ -73,8 +73,12 @@ void      bsp_cycle_timer_ack(void);               /* from the handler: clear th
  *    misaligned or in the region itself (never overlapping dst). It programs only erased units,
  *    or, where zero_overwrite is true, units it then overwrites with zeros.
  *  - read: copies size bytes from the region to dst.
- * Each returns BSP_NVM_OK on success; a write the flash refused without programming anything
- * returns BSP_NVM_REFUSED; any other value is a failure the BSP numbers as it likes. */
+ * Each returns BSP_NVM_OK on success. A write returns BSP_NVM_REFUSED when the flash refused to
+ * program a unit that was not erased (zero_overwrite says when it may accept zeros there, not that
+ * it always does). It has then programmed nothing at or above the refused unit; the units of the
+ * call below it may be programmed, as a power cut at the refused unit would have left them (since
+ * 1.3; 1.2 said nothing programmed). Only a write returns BSP_NVM_REFUSED: an erase that fails
+ * returns a failure (since 1.3). Any other value is a failure the BSP numbers as it likes. */
 #define BSP_NVM_OK      0u
 #define BSP_NVM_REFUSED 6u              /* lean-ftl's LFTL_NVM_STATUS_REFUSED */
 

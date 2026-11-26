@@ -6,13 +6,17 @@
  * operation:
  *  - erase: page by page (8 KiB), the bank chosen from the address, SWAP_BANK taken into account;
  *  - write: quad-words (16 bytes, the program unit and the ECC word), from any source alignment,
+ *    in ascending order, stopping at the first one the flash refuses, so that those above it are
+ *    left untouched, as a power cut there would have left them (R9 of lean-ftl's flash page);
  *    then read back;
  *  - the instruction cache is off during each erase and program: it treats them as errors;
  *  - the error flags are cleared before each operation and checked after it, so that a refused
  *    operation is reported once, to the caller, and poisons nothing (RM0456 7.3.6 to 7.3.9).
  * Status: BSP_NVM_OK; 1, 2 outside the region; 3 misaligned address; 4 size not a multiple of the
- * program unit; 5 programmed without error but read back different; BSP_NVM_REFUSED the flash
- * refused or aborted the operation. */
+ * program unit; 5 programmed without error but read back different; BSP_NVM_REFUSED (writes only,
+ * contract 1.3) the flash refused to program a unit that was not erased, which sets PROGERR and
+ * PGSERR together (as lean-ftl measured, its FLASH.md); 7 the flash reported any other error, in
+ * an erase or a write (write protection, a sequence or alignment error, PGSERR alone). */
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -50,6 +54,11 @@
 static inline void clear_flags(void) { WRITE_REG(FLASH_NS->NSSR, NVM_SR_ERRORS | FLASH_NSSR_EOP); }
 
 static inline uint32_t errors(void) { return READ_BIT(FLASH_NS->NSSR, NVM_SR_ERRORS); }
+
+/* A refusal: PROGERR, with nothing else than PGSERR beside it. */
+static inline bool refusal(uint32_t flags) {
+    return (flags & FLASH_NSSR_PROGERR) && !(flags & ~(uint32_t)(FLASH_NSSR_PROGERR | FLASH_NSSR_PGSERR));
+}
 
 static inline bool in_region(uintptr_t addr, uintptr_t size) {
     return addr >= NVM0_BASE && size <= NVM0_SIZE && addr - NVM0_BASE <= NVM0_SIZE - size;
@@ -93,7 +102,8 @@ static void __attribute__((section(".RamFunc"))) erase_page(uintptr_t page_addr)
     icache_back(icache);
 }
 
-/* `n` quad-words; the source may be misaligned, or in the flash itself. */
+/* `n` quad-words; the source may be misaligned, or in the flash itself. Stops at the first error
+ * (PROGERR for a target that is not erased), which the caller reads in the flags. */
 static void __attribute__((section(".RamFunc"))) program(volatile uint32_t *dst, const uint8_t *src, uint32_t n) {
     const bool icache = icache_off();
     WRITE_REG(FLASH_NS->NSCR, FLASH_NSCR_PG);
@@ -108,6 +118,7 @@ static void __attribute__((section(".RamFunc"))) program(volatile uint32_t *dst,
         dst += 4;
         while (READ_BIT(FLASH_NS->NSSR, FLASH_NSSR_BSY)) {
         }
+        if (READ_BIT(FLASH_NS->NSSR, NVM_SR_ERRORS)) break;
     }
     WRITE_REG(FLASH_NS->NSCR, 0);
     icache_back(icache);
@@ -128,7 +139,7 @@ static uint8_t nvm0_erase(void *base_address, unsigned n_pages) {
     clear_flags();
     lock();
     __set_PRIMASK(primask);
-    return failed ? BSP_NVM_REFUSED : BSP_NVM_OK;
+    return failed ? 7 : BSP_NVM_OK;
 }
 
 static uint8_t nvm0_write(void *dst, const void *src, uintptr_t size) {
@@ -144,7 +155,7 @@ static uint8_t nvm0_write(void *dst, const void *src, uintptr_t size) {
     const uint32_t failed = errors();
     clear_flags();
     lock();
-    const uint8_t status = failed ? BSP_NVM_REFUSED : (memcmp(dst, src, size) ? 5 : BSP_NVM_OK);
+    const uint8_t status = failed ? (refusal(failed) ? BSP_NVM_REFUSED : 7) : (memcmp(dst, src, size) ? 5 : BSP_NVM_OK);
     __set_PRIMASK(primask);
     return status;
 }
