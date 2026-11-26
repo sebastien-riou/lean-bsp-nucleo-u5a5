@@ -31,7 +31,7 @@ lbsp build-load-run --bsp nucleo-u5a5 --until 'hello-world done' --timeout 60
 | Heap usage | growth of the heap end since the last reset, tracked in `_sbrk` (`Core/Src/sysmem.c`) |
 | Reset | `NVIC_SystemReset()` |
 | `app_tick` | from `SysTick_Handler`, every millisecond |
-| `app_on_fault` | from the HardFault, MemManage, BusFault and UsageFault handlers (`pc` is 0) |
+| `app_on_fault` | from the HardFault, MemManage, BusFault and UsageFault handlers, and from the NMI after a one-line report on UART 0, written straight to the USART: `lean-bsp: NMI, flash ECC double error, FLASH_ECCR=0x...` for a read of flash a power cut left half-programmed or half-erased (`pc` is 0). The BSP then stops: it makes test and demo firmware, and does not recover from the fault as production firmware would have to |
 | `app_on_exit` | default does nothing: `main()` then parks the CPU |
 | Flash/NVM | region 0, `bank2`: flash bank 2 (0x08200000, 2 MiB), 8 KiB pages, 16-byte program unit (a quad-word, the ECC word), zeros may be programmed over programmed data. The image stays in bank 1 (2 MiB). Erase and write refuse anything outside the region. A write stops at the first unit the flash refuses, one that is not erased: `BSP_NVM_REFUSED` (contract 1.3); any other flash error, in an erase or a write, is status 7. A load through lean-hwbridge erases the whole flash, bank 2 included |
 

@@ -57,6 +57,34 @@ void bsp_uart_tx(unsigned port, const void *buf, size_t len) {
     }
 }
 
+/* ---- NMI: a best-effort report on UART 0 ----
+ * On this part an NMI is mostly a flash ECC double error (FLASH_ECCR.ECCD, RM0456 7.3.2): a read
+ * of a quad-word that a power cut left half-programmed or half-erased. lean-bsp makes test and
+ * demo firmware: the BSP reports the NMI and stops (NMI_Handler, Core/Src/stm32u5xx_it.c); it
+ * does not recover, which production firmware would have to (lean-ftl's flash page, R7). The line
+ * goes straight to the USART, since the HAL may be in the middle of a transfer; nothing is sent
+ * while UART 0 is not set up. */
+static void nmi_tx(USART_TypeDef *u, const char *s) {
+    for (; *s; s++) {
+        while (!(u->ISR & USART_ISR_TXE_TXFNF)) {  /* bounded by the baud rate */
+        }
+        u->TDR = (uint8_t)*s;
+    }
+}
+
+void bsp_nmi_report(void) {
+    const uint32_t eccr = READ_REG(FLASH->ECCR);
+    USART_TypeDef *u = uart0()->Instance;
+    if (u == NULL || (u->CR1 & (USART_CR1_UE | USART_CR1_TE)) != (USART_CR1_UE | USART_CR1_TE)) return;
+    char hex[] = "0x00000000";
+    for (int i = 0; i < 8; i++) hex[2 + i] = "0123456789abcdef"[(eccr >> (28 - 4 * i)) & 0xFu];
+    nmi_tx(u, "\nlean-bsp: NMI");
+    if (eccr & FLASH_ECCR_ECCD) nmi_tx(u, ", flash ECC double error");
+    nmi_tx(u, ", FLASH_ECCR=");
+    nmi_tx(u, hex);
+    nmi_tx(u, "\n");
+}
+
 /* Polled: what arrives while nobody calls this can overrun the peripheral's FIFO; an interrupt-fed
  * ring buffer is the obvious next step once an application needs continuous input. */
 size_t bsp_uart_rx(unsigned port, void *buf, size_t len) {
