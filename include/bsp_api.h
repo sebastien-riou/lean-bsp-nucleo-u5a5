@@ -1,4 +1,4 @@
-/* bsp_api.h - lean-bsp contract 1.3
+/* bsp_api.h - lean-bsp contract 1.5
  *
  * Shared by every lean-bsp BSP and every lean-bsp application. Each BSP keeps
  * a byte-identical copy at include/bsp_api.h; `lean-bsp check` verifies it.
@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define LEAN_BSP_CONTRACT_VERSION "1.3"
+#define LEAN_BSP_CONTRACT_VERSION "1.5"
 
 /* ---- BSP -> app hooks ----
  * app_main is required and defined by the application. The BSP provides weak,
@@ -42,8 +42,17 @@ uint32_t  bsp_cpu_freq_hz(void);                                     /* rate of 
 void      bsp_delay_ms(uint32_t ms);
 void      bsp_reset(void);                                           /* restart the firmware, does not return */
 void      bsp_clear_caches(void);        /* invalidate I/D caches and flash prefetch; no-op without caches */
-void      bsp_heap_usage_reset(void);    /* restart heap high-water-mark tracking */
-size_t    bsp_heap_usage(void);          /* growth of the heap high-water mark since the last reset, in bytes */
+void      bsp_heap_usage_reset(void);    /* the bytes live now become the baseline (see below) */
+size_t    bsp_heap_usage(void);          /* the most live bytes since the reset, minus the baseline */
+
+/* Heap use (since contract 1.4; up to 1.3, how far the heap end had moved). Live bytes are the
+ * sizes requested from malloc, calloc and realloc for the blocks not freed yet, so the figure does
+ * not depend on the allocator. bsp_heap_usage() is the most they have been since the last
+ * bsp_heap_usage_reset(), minus what they were at the reset; SIZE_MAX when a block could not be
+ * recorded since then. Every BSP counts them with the same file, lean-bsp's bsp_heap.c, which it
+ * keeps a byte-identical copy of at src/bsp_heap.c (`lean-bsp check` verifies it); its head says
+ * what is counted and how. Nothing may allocate or free from an interrupt handler or from another
+ * core while the count matters. */
 
 /* ---- cycle timer: optional, bsp.toml primitive cycle_timer (since contract 1.1) ----
  * A one-shot timer counting CPU cycles. Its interrupt preempts everything else the BSP runs and
@@ -97,6 +106,27 @@ typedef struct {
     bsp_nvm_write_t   write;
     bsp_nvm_read_t    read;
 } bsp_nvm_region_t;
+
+/* ---- what the board is made of (since contract 1.5) ----
+ * A BSP that drives a board declares in bsp.toml its MCU ([bsp.mcu]), the parts outside it that
+ * hold the application's code or data and any other it chooses to list ([[bsp.parts]]), and, for
+ * a target on an Armv8-M CPU with TrustZone, the security state the application runs in. lean-bsp
+ * passes them to the application's compilation:
+ *  - LEAN_BSP_MCU_VENDOR and LEAN_BSP_MCU_PART, strings, e.g. "ST" and "STM32U5A5ZJT6Q" (the
+ *    ordering code);
+ *  - LEAN_BSP_MCU_IS_<NAME>, defined to 1 for the part and for each family the vendor puts it
+ *    in, e.g. LEAN_BSP_MCU_IS_STM32U5: an application matches on a family rather than on a part;
+ *  - for each outside part, of role <ROLE> (e.g. FLASH): LEAN_BSP_PART_<ROLE> and
+ *    LEAN_BSP_PART_<ROLE>_VENDOR, strings, and LEAN_BSP_PART_<ROLE>_IS_<NAME>, 1, for the part
+ *    and its families;
+ *  - one of LEAN_BSP_TRUSTZONE_OFF, LEAN_BSP_TRUSTZONE_SECURE and LEAN_BSP_TRUSTZONE_NON_SECURE,
+ *    defined to 1, when the target says it: it decides which of a peripheral's two addresses works.
+ * <NAME> and <ROLE> are bsp.toml's values in upper case, with '_' for every character outside
+ * A-Z and 0-9. Where bsp.toml says `checked = true` for the MCU or a part, the BSP reads at
+ * startup what the part says of itself and stops before app_init when it is not the declared one.
+ * The application runs in the CPU's most privileged mode. An application that drives hardware the
+ * contract does not cover leaves alone the peripherals the BSP reserves ([bsp.mcu] reserved,
+ * listed by `lean-bsp show-bsp`); the rest is its own once bsp_init has returned. */
 
 /* ---- capability introspection: runtime, const, BSP-populated ---- */
 typedef struct {

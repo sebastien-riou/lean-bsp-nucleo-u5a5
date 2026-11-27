@@ -25,30 +25,11 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include "bsp_api.h"
 
 /**
  * Pointer to the current high watermark of the heap usage
  */
 static uint8_t *__sbrk_heap_end = NULL;
-
-/* lean-bsp heap usage: newlib's heap only grows, through _sbrk, so how far its end moved since
- * bsp_heap_usage_reset() is how much more heap the code run since then needed. */
-static uint8_t *heap_mark = NULL;
-static uint8_t *heap_peak = NULL;
-
-void bsp_heap_usage_reset(void)
-{
-  extern uint8_t _end; /* Symbol defined in the linker script */
-  uint8_t *now = (NULL == __sbrk_heap_end) ? &_end : __sbrk_heap_end;
-  heap_mark = now;
-  heap_peak = now;
-}
-
-size_t bsp_heap_usage(void)
-{
-  return heap_peak > heap_mark ? (size_t)(heap_peak - heap_mark) : 0;
-}
 
 /**
  * @brief _sbrk() allocates memory to the newlib heap and is used by malloc
@@ -95,10 +76,6 @@ void *_sbrk(ptrdiff_t incr)
 
   prev_heap_end = __sbrk_heap_end;
   __sbrk_heap_end += incr;
-  if (__sbrk_heap_end > heap_peak)
-  {
-    heap_peak = __sbrk_heap_end;
-  }
 
   return (void *)prev_heap_end;
 }
